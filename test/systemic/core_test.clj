@@ -1,5 +1,5 @@
 (ns systemic.core-test
-  (:require [systemic.core :as sut :refer [defsys]]
+  (:require [systemic.core :as sut :refer [defsys with-system]]
             [clojure.test :refer [deftest testing is use-fixtures]]))
 
 (def start-called (atom false))
@@ -8,7 +8,8 @@
 (use-fixtures :each (fn [f]
                       (reset! start-called false)
                       (reset! stop-called false)
-                      (f)))
+                      (f)
+                      (sut/stop!)))
 
 (defsys ^:symbol-meta *config*
   "Some documentation"
@@ -20,7 +21,6 @@
   (reset! stop-called true)
   *config* ;; testing we can be self-refrerential
   :foo)
-
 
 (defsys *dependent*
   :start
@@ -94,12 +94,11 @@
       (is (not @original-start-called))
       (reset! original-stop-called false)
 
+      (is (sut/running? `*redefined*))
       (sut/stop! [`*redefined*])
       (is (not @original-stop-called))
-      (is @new-stop-called))
-
-    (sut/forget! `*redefined*)))
-
+      (is @new-stop-called)
+      (sut/forget! `*redefined*))))
 
 (deftest start-order
   (binding [sut/*registry* (atom {`*config*   {:dependencies #{}}
@@ -124,8 +123,6 @@
              (sut/start!))))
     (testing "rebinds the variables at the root"
       (is (= {:foo 5} *config*)))
-    (testing "associates the variable in the *system* variable"
-      (is (= {:foo 5} (get sut/*system* `*config*))))
 
     (testing "calls the start function"
       (is @start-called))
@@ -158,9 +155,6 @@
     (testing "unbinds the variables at the root"
       (is (= ::sut/not-running (:type (ex-data *config*)))))
 
-    (testing "removes the variable from the *system* variable"
-      (is (not (contains? sut/*system* `*config*))))
-
     (testing "resolves as not running"
       (is (not (sut/running? `*config*))))
 
@@ -171,3 +165,24 @@
       (reset! stop-called false)
       (is (nil? (sut/stop!)))
       (is (not @stop-called)))))
+
+(deftest with-system-test
+  (testing "overwrites bindings"
+    (let [original-start-called (atom false)
+          original-val-called   (atom false)
+          mock-val-called       (atom false)]
+      (defsys *will-be-mocked*
+        :start
+        (reset! original-start-called true)
+        #(reset! original-val-called true))
+      (defsys *depends-on-mocked*
+        :start
+        (*will-be-mocked*))
+      (with-system [*will-be-mocked* #(reset! mock-val-called true)]
+        (sut/start! `[*depends-on-mocked*])
+        (is (not @original-start-called))
+        (is (not @original-val-called))
+        (is @mock-val-called))
+      (sut/stop!)
+      (sut/forget! `*will-be-mocked*)
+      (sut/forget! `*depends-on-mocked*))))

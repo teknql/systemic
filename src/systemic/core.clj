@@ -11,9 +11,6 @@
 (def ^:dynamic *isolated*
   nil)
 
-(def ^:dynamic *system*
-  {})
-
 (defn- -set!
   "A variant of `-set!` that sets dynamic variables in the root by editing the root variable in the
   case that we aren't in an isolated scope.
@@ -86,7 +83,11 @@
 (defn running?
   "Returns whether the provided system is currently running"
   [system-symbol]
-  (contains? *system* system-symbol))
+  (not (some-> (resolve system-symbol)
+               (var-get)
+               (ex-data)
+               :type
+               (= ::not-running))))
 
 (defn- -start!
   "Private helper for `start!`. Returns a system map of state"
@@ -106,7 +107,6 @@
   ([] (start! nil))
   ([system-symbols]
    (let [sys-map (-start! system-symbols)]
-     (-set! `*system* (merge *system* sys-map))
      (doseq [[sys state] sys-map]
        (-set! sys state))
      (keys sys-map))))
@@ -130,9 +130,7 @@
   (and their dependencies) will be started."
   ([] (stop! nil))
   ([system-symbols]
-   (let [stopped (-stop! system-symbols)
-         sys-map (apply dissoc *system* stopped)]
-     (-set! `*system* sys-map)
+   (let [stopped (-stop! system-symbols)]
      (doseq [sys stopped]
        (-set! sys (ex-info "System not running" {:type   ::not-running
                                                  :system sys})))
@@ -161,16 +159,23 @@
   [system-symbol]
   (keys (swap! *registry* dissoc system-symbol)))
 
+(defn state
+  "Returns the existing state for the running system, if it exists"
+  [system-symbol]
+  (when (running? system-symbol)
+    (var-get (resolve system-symbol))))
+
 
 (defn register-system!
   "Registers a system in the `registry`. Called by the `defsys` macro. Use that instead!"
   [system-name data]
-  (let [running? (running? system-name)]
-    (when running?
+  (let [was-running? (running? system-name)]
+    (when was-running?
       (stop! [system-name]))
     (swap! *registry* assoc system-name data)
-    (when running?
-      (start! [system-name]))))
+    (when was-running?
+      (start! [system-name]))
+    (resolve system-name)))
 
 (defmacro defsys
   "Defines a new systemic component with the provided name."
@@ -192,23 +197,31 @@
         stop-fn (when stop-body
                   `(fn [] ~@stop-body))
 
-        deps (set/union
-               (find-dependencies start-body @*registry*)
-               (find-dependencies stop-body @*registry*))
+        qualified-sym (symbol (str *ns*) (str name))
 
-        name          (with-meta name (merge {:dynamic       true
-                                              :doc           doc-str
-                                              ::system       true
-                                              ::dependencies deps}
-                                             (meta name)
-                                             attr-map))
-        qualified-sym (symbol (str *ns*) (str name))]
+        deps (set/difference (set/union
+                               (find-dependencies start-body @*registry*)
+                               (find-dependencies stop-body @*registry*))
+                             #{qualified-sym})
 
-    `(do
-       (declare ~name)
-       (register-system! '~qualified-sym
-                         {:start        ~start-fn
-                          :stop         ~stop-fn
-                          :dependencies '~deps})
-       (def ~name (ex-info "System not running" {:type   ::not-running
-                                                 :system '~qualified-sym})))))
+        name (with-meta name (merge {:dynamic       true
+                                     :doc           doc-str
+                                     ::system       true
+                                     ::dependencies deps}
+                                    (meta name)
+                                    attr-map))]
+    `(do (def ~name
+           (or (state '~qualified-sym)
+               (ex-info "System not running" {:type   ::not-running
+                                              :system '~qualified-sym})))
+         (register-system! '~qualified-sym
+                           {:start        ~start-fn
+                            :stop         ~stop-fn
+                            :dependencies '~deps}))))
+
+
+(defmacro with-system
+  "Executes `body` using system overrides from `bindings` as running systems."
+  [bindings & body]
+  `(binding ~bindings
+     ~@body))
