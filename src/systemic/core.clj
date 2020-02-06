@@ -89,11 +89,16 @@
 (defn running?
   "Returns whether the provided system is currently running"
   [system-symbol]
-  (not (some-> (resolve system-symbol)
-               (var-get)
-               (ex-data)
-               :type
-               (= ::not-running))))
+  (let [v       (resolve system-symbol)
+        var-val (when v (var-get v))]
+    (cond
+      (not v)            false
+      (not (bound? v))   false
+      (= ::not-running
+         (some-> var-val
+                 (ex-data)
+                 :type)) false
+      :else              true)))
 
 (defn- -start!
   "Private helper for `start!`. Returns a system map of state"
@@ -242,3 +247,22 @@
            bindings#  (merge base# overrides#)]
        (with-bindings bindings#
          ~@body))))
+
+(defmacro with-isolated-registry
+  "Executes `body` with an isolated registry such that `defsys` calls will not be persisted.
+
+  Defined systems will be removed from the calling ns as well."
+  [& body]
+  `(let [reg#           @*registry*
+         known-systems# (set (keys reg#))
+         temp-reg#      (atom reg#)]
+     (binding [*registry* temp-reg#]
+       (try
+         ~@body
+         (finally
+           (let [new-systems# (->> @temp-reg#
+                                   (keys)
+                                   (remove known-systems#))]
+             (doseq [s# new-systems#]
+               (ns-unmap (symbol (namespace s#))
+                         (symbol (name s#))))))))))

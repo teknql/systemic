@@ -1,5 +1,5 @@
 (ns systemic.core-test
-  (:require [systemic.core :as sut :refer [defsys with-system]]
+  (:require [systemic.core :as sut :refer [defsys with-system with-isolated-registry]]
             [clojure.test :refer [deftest testing is use-fixtures]]))
 
 (def start-called (atom false))
@@ -71,34 +71,34 @@
              (-> @sut/*registry* (get `*dependent*) :dependencies)))))
 
   (testing "redefinition semantics"
-    (let [original-start-called (atom false)
-          original-stop-called  (atom false)
-          new-start-called      (atom false)
-          new-stop-called       (atom false)]
+    (with-isolated-registry
+      (let [original-start-called (atom false)
+            original-stop-called  (atom false)
+            new-start-called      (atom false)
+            new-stop-called       (atom false)]
 
-      (defsys *redefined*
-        :start (reset! original-start-called true)
-        :stop (reset! original-stop-called true))
+        (defsys *redefined*
+          :start (reset! original-start-called true)
+          :stop (reset! original-stop-called true))
 
-      (sut/start! [`*redefined*])
+        (sut/start! [`*redefined*])
 
-      (is @original-start-called)
-      (reset! original-start-called false)
+        (is @original-start-called)
+        (reset! original-start-called false)
 
-      (defsys *redefined*
-        :start (reset! new-start-called true)
-        :stop (reset! new-stop-called true))
+        (defsys *redefined*
+          :start (reset! new-start-called true)
+          :stop (reset! new-stop-called true))
 
-      (is @original-stop-called)
-      (is @new-start-called)
-      (is (not @original-start-called))
-      (reset! original-stop-called false)
+        (is @original-stop-called)
+        (is @new-start-called)
+        (is (not @original-start-called))
+        (reset! original-stop-called false)
 
-      (is (sut/running? `*redefined*))
-      (sut/stop! [`*redefined*])
-      (is (not @original-stop-called))
-      (is @new-stop-called)
-      (sut/forget! `*redefined*))))
+        (is (sut/running? `*redefined*))
+        (sut/stop! [`*redefined*])
+        (is (not @original-stop-called))
+        (is @new-stop-called)))))
 
 (deftest start-order
   (binding [sut/*registry* (atom {`*config*   {:dependencies #{}}
@@ -168,21 +168,20 @@
 
 (deftest with-system-test
   (testing "overwrites bindings"
-    (let [original-start-called (atom false)
-          original-val-called   (atom false)
-          mock-val-called       (atom false)]
-      (defsys *will-be-mocked*
-        :start
-        (reset! original-start-called true)
-        #(reset! original-val-called true))
-      (defsys *depends-on-mocked*
-        :start
-        (*will-be-mocked*))
-      (with-system [*will-be-mocked* #(reset! mock-val-called true)]
-        (sut/start! [`*depends-on-mocked*])
-        (is (not @original-start-called))
-        (is (not @original-val-called))
-        (is @mock-val-called))
-      (sut/stop!)
-      (sut/forget! `*will-be-mocked*)
-      (sut/forget! `*depends-on-mocked*))))
+    (with-isolated-registry
+      (let [original-start-called (atom false)
+            original-val-called   (atom false)
+            mock-val-called       (atom false)]
+        (defsys *will-be-mocked*
+          :start
+          (reset! original-start-called true)
+          #(reset! original-val-called true))
+        (defsys *depends-on-mocked*
+          :start
+          (*will-be-mocked*))
+        (with-system [*will-be-mocked* #(reset! mock-val-called true)]
+          (sut/start! [`*depends-on-mocked*])
+          (is (not @original-start-called))
+          (is (not @original-val-called))
+          (is @mock-val-called))
+        (sut/stop!)))))
