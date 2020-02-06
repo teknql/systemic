@@ -179,7 +179,7 @@
         :start
         (*will-be-mocked*))
       (with-system [*will-be-mocked* #(reset! mock-val-called true)]
-        (sut/start! `[*depends-on-mocked*])
+        (sut/start! [`*depends-on-mocked*])
         (is (not @original-start-called))
         (is (not @original-val-called))
         (is @mock-val-called))

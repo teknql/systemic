@@ -21,6 +21,12 @@
     (alter-var-root (resolve var-symbol) (constantly value))
     (eval `(set! ~var-symbol ~value))))
 
+(defn not-running
+  "Returns the not-running exception for the provided `system-symbol`"
+  [system-symbol]
+  (ex-info "System not running" {:type   ::not-running
+                                 :system system-symbol}))
+
 (defn- extract-arg
   "Utility function for extracting arguments from a list.
   Returns a tuple of the value matching the `pred` if it returns logical true and the
@@ -132,8 +138,7 @@
   ([system-symbols]
    (let [stopped (-stop! system-symbols)]
      (doseq [sys stopped]
-       (-set! sys (ex-info "System not running" {:type   ::not-running
-                                                 :system sys})))
+       (-set! sys (not-running sys)))
      (seq stopped))))
 
 (defn restart!
@@ -212,8 +217,7 @@
                                     attr-map))]
     `(do (def ~name
            (or (state '~qualified-sym)
-               (ex-info "System not running" {:type   ::not-running
-                                              :system '~qualified-sym})))
+               (not-running '~qualified-sym)))
          (register-system! '~qualified-sym
                            {:start        ~start-fn
                             :stop         ~stop-fn
@@ -223,5 +227,18 @@
 (defmacro with-system
   "Executes `body` using system overrides from `bindings` as running systems."
   [bindings & body]
-  `(binding ~bindings
-     ~@body))
+  (let [bindings (->> bindings
+                      (partition 2 2)
+                      (mapcat (fn [[s expr]]
+                                [`#'~s expr])))]
+    `(let [systems#   (keys @*registry*)
+           base#      (->> systems#
+                           (map (fn [k#]
+                                  [(resolve k#) (not-running k#)]))
+                           (into {}))
+           overrides# (array-map
+                        (var *isolated*) true
+                        ~@bindings)
+           bindings#  (merge base# overrides#)]
+       (with-bindings bindings#
+         ~@body))))
