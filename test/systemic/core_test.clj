@@ -164,6 +164,12 @@
     (testing "does not call stop for already stopped systems"
       (reset! stop-called false)
       (is (nil? (sut/stop!)))
+      (is (not @stop-called)))
+
+    (testing "stops only specified systems when explicitly specified"
+      (reset! stop-called false)
+      (sut/start!)
+      (sut/stop! [`*dependent*])
       (is (not @stop-called)))))
 
 (deftest with-system-test

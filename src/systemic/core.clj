@@ -125,10 +125,13 @@
 (defn- -stop!
   "Private helper for `stop!`. Returns a seq of stopped symbols"
   [system-symbols]
-  (let [reg     @*registry*
-        to-stop (->> system-symbols
-                     (stop-order)
-                     (filter sut/running?))]
+  (let [reg            @*registry*
+        system-symbols (set (or system-symbols
+                                (keys reg)))
+        to-stop        (->> system-symbols
+                            (stop-order)
+                            (filter sut/running?)
+                            (filter system-symbols))]
     (doseq [sys to-stop]
       (when-some [stop-fn (-> reg (get sys) :stop)]
         (stop-fn)))
