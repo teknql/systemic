@@ -1,13 +1,18 @@
 (ns systemic.core-test
   (:require [systemic.core :as sut :refer [defsys with-system with-isolated-registry]]
+            [systemic.internal :as internal]
             [clojure.test :refer [deftest testing is use-fixtures]]))
 
 (def start-called (atom false))
 (def stop-called (atom false))
+(def dependent-started (atom false))
+(def transitive-dependent-started (atom false))
 
 (use-fixtures :each (fn [f]
                       (reset! start-called false)
                       (reset! stop-called false)
+                      (reset! dependent-started false)
+                      (reset! transitive-dependent-started false)
                       (f)
                       (sut/stop!)))
 
@@ -24,7 +29,13 @@
 
 (defsys *dependent*
   :start
+  (reset! dependent-started true)
   (:foo *config*))
+
+(defsys *transitive-dependent*
+  :start
+  *dependent*
+  (reset! transitive-dependent-started true))
 
 (def registry-symbol
   "Hardcoded definition of our expected registry symbol. Using something more dynamic
@@ -36,9 +47,7 @@
 (deftest find-dependencies-test
   (testing "correctly identifies dependencies in a body"
     (is (= #{registry-symbol}
-           (#'sut/find-dependencies
-             `(get *config* :foo)
-             @sut/*registry*)))))
+           (internal/find-dependencies (-> *ns* str symbol) `(get *config* :foo) @sut/*registry*)))))
 
 (deftest defsys-test
   (testing "registers it in the registry"
@@ -56,9 +65,8 @@
         (is (:attr-meta meta)))
       (testing "symbol metadata"
         (is (:symbol-meta meta)))
-      (testing "documentation string"
-        (is (= "Some documentation"
-               (:doc meta))))))
+      (testing "documentation string" (is (= "Some documentation"
+                                             (:doc meta))))))
 
   (testing "sets the initial variable binding to not running"
     (let [data (ex-data *config*)]
@@ -81,7 +89,7 @@
           :start (reset! original-start-called true)
           :stop (reset! original-stop-called true))
 
-        (sut/start! [`*redefined*])
+        (sut/start! `*redefined*)
 
         (is @original-start-called)
         (reset! original-start-called false)
@@ -96,30 +104,14 @@
         (reset! original-stop-called false)
 
         (is (sut/running? `*redefined*))
-        (sut/stop! [`*redefined*])
+        (sut/stop! `*redefined*)
         (is (not @original-stop-called))
         (is @new-stop-called)))))
-
-(deftest start-order
-  (binding [sut/*registry* (atom {`*config*   {:dependencies #{}}
-                                  `*db*       {:dependencies #{`*config*}}
-                                  `*indexer*  {:dependencies #{`*db*}}
-                                  `*web*      {:dependencies #{`*db*}}
-                                  `*isolated* {:dependencies #{}}})]
-    (testing "returns a sorted list of all systems if no systems are specified"
-      (is (= `(*config* *db* *web* *indexer* *isolated*)
-             (sut/start-order))))
-
-    (testing "returns a subset of systems if systems are specified"
-      (is (= `(*config*) (sut/start-order `(*config*))))
-      (is (= `(*config* *db* *web*) (sut/start-order `(*web*))))
-      (is (= `(*config* *db* *web*) (sut/start-order `(*db* *web*)))))))
-
 
 (deftest start-restart-stop-test
   (testing "start"
     (testing "returns the started systems"
-      (is (= `(*config* *dependent*)
+      (is (= `(*config* *dependent* *transitive-dependent*)
              (sut/start!))))
     (testing "rebinds the variables at the root"
       (is (= {:foo 5} *config*)))
@@ -133,13 +125,24 @@
       (is (not @start-called)))
 
     (testing "resolves as running?"
-      (is (sut/running? `*config*))))
+      (is (sut/running? `*config*)))
+
+    (testing "starts only specified systems when specified"
+      (sut/stop!)
+      (sut/start! `*config*)
+      (is (not (sut/running? `*dependent*)))
+      (is (not (sut/running? `*transitive-dependent*)))
+      (is (sut/running? `*config*))
+
+      (sut/start! `*transitive-dependent*)
+      (is (sut/running? `*dependent*))
+      (is (sut/running? `*transitive-dependent*))))
 
   (testing "restart"
     (reset! stop-called false)
     (reset! start-called false)
     (testing "returns the restarted systems"
-      (is (= `(*config* *dependent*)
+      (is (= `(*config* *dependent* *transitive-dependent*)
              (sut/restart!))))
 
     (testing "calls stop"
@@ -150,7 +153,7 @@
   (testing "stop"
     (reset! stop-called false)
     (testing "returns the stopped systems"
-      (is (= `(*dependent* *config*)
+      (is (= `(*transitive-dependent* *dependent* *config*)
              (sut/stop!))))
     (testing "unbinds the variables at the root"
       (is (= ::sut/not-running (:type (ex-data *config*)))))
@@ -169,7 +172,7 @@
     (testing "stops only specified systems when explicitly specified"
       (reset! stop-called false)
       (sut/start!)
-      (sut/stop! [`*dependent*])
+      (sut/stop! `*dependent*)
       (is (not @stop-called)))))
 
 (deftest with-system-test
@@ -181,13 +184,67 @@
         (defsys *will-be-mocked*
           :start
           (reset! original-start-called true)
-          #(reset! original-val-called true))
+          #(reset! original-val-called true)
+          )
         (defsys *depends-on-mocked*
           :start
           (*will-be-mocked*))
         (with-system [*will-be-mocked* #(reset! mock-val-called true)]
-          (sut/start! [`*depends-on-mocked*])
+          (sut/start! `*depends-on-mocked*)
           (is (not @original-start-called))
           (is (not @original-val-called))
           (is @mock-val-called))
-        (sut/stop!)))))
+        (sut/stop!))))
+
+  (testing "prevents un-needed dependencies from being started"
+    (with-isolated-registry
+      (let [a-started  (atom false)
+            b-started  (atom false)
+            c-started  (atom false)
+            d-started  (atom false)
+            e-started  (atom false)
+            reset-all! #(doseq [a [a-started b-started c-started d-started e-started]]
+                          (reset! a false))]
+
+        (defsys *a*
+          :start
+          (reset! a-started true))
+
+        (defsys *b*
+          :start
+          *a*
+          (reset! b-started true))
+
+        (defsys *c*
+          :start
+          *b*
+          (reset! c-started true))
+
+        (defsys *d*
+          :start
+          *a*
+          (reset! d-started true))
+
+        (defsys *e*
+          :start
+          *c*
+          *d*
+          (reset! e-started true))
+
+        (testing "direct dependencies"
+          (with-system [*b* true]
+            (sut/start! `*c*)
+            (is @c-started)
+            (is (not @b-started))
+            (is (not @a-started))
+            (reset-all!)))
+
+        (testing "transitive dependencies"
+          (with-system [*c* true]
+            (sut/start! `*e*)
+            (is @e-started)
+            (is @d-started)
+            (is @a-started)
+            (is (not @b-started))
+            (is (not @c-started))
+            (reset-all!)))))))
