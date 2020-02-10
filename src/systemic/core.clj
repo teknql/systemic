@@ -52,71 +52,54 @@
            (when (dependencies system-symbol)
              s)))))
 
-(defn- -start!
-  "Private helper for `start!`. Returns a system map of state"
-  [system-symbols]
-  (let [reg @*registry*]
-    (loop [system-state   {}
-           system-symbols (->> (if (seq system-symbols)
-                                 (->> system-symbols
-                                      (map (comp symbol resolve)))
-                                 (keys reg))
-                               (remove running?))]
-      (if-some [sys (first system-symbols)]
-        (let [{:keys [start dependencies]} (get reg sys)
-              needed-deps                  (remove (some-fn
-                                                     running?
-                                                     #(contains? system-state %)) dependencies)]
-          (if (seq needed-deps)
-            (recur system-state (concat needed-deps system-symbols))
-            (recur (assoc system-state sys (when start
-                                             (start)))
-                   (rest system-symbols))))
-        system-state))))
-
 (defn start!
   "Starts all known systems.
 
   If called with symbols, only the provided systems (and their dependencies) will be started."
   [& system-symbols]
-  (let [sys-map (-start! system-symbols)]
-    (doseq [[sys state] sys-map]
-      (-set! sys state))
-    (keys sys-map)))
-
-(defn- -stop!
-  "Private helper for `stop!`. Returns a seq of stopped symbols"
-  [system-symbols]
-  (let [reg     @*registry*
-        systems (->> (if (seq system-symbols)
-                       system-symbols
-                       (keys reg))
-                     (map (comp symbol resolve)))]
-    (loop [to-stop systems
-           stopped '()]
-      (if-some [system (first to-stop)]
-        (let [not-running-or-stopped? (some-fn
-                                        #(contains? (set stopped) %)
-                                        (comp not running?))]
-          (if (not-running-or-stopped? system)
-            (recur (rest to-stop) stopped)
-            (let [running-dependents (remove not-running-or-stopped? (dependents system))]
-              (if (seq running-dependents)
-                (recur (concat running-dependents to-stop) stopped)
-                (do (when-some [stop-fn (-> reg (get system) :stop)]
-                      (stop-fn))
-                    (recur (rest to-stop) (cons system stopped)))))))
-        (reverse stopped)))))
+  (let [reg @*registry*]
+    (loop [started-systems nil
+           system-symbols  (->> (if (seq system-symbols)
+                                  (->> system-symbols
+                                       (map (comp symbol resolve)))
+                                  (keys reg))
+                                (remove running?)
+                                (doall))]
+      (if-some [sys (first system-symbols)]
+        (let [{:keys [start dependencies]} (get reg sys)
+              needed-deps                  (remove running? dependencies)]
+          (if (seq needed-deps)
+            (recur started-systems (concat needed-deps system-symbols))
+            (do (-set! sys (when start (start)))
+                (recur (cons sys started-systems)
+                       (rest system-symbols)))))
+        (when started-systems
+          (reverse started-systems))))))
 
 (defn stop!
   "Stops all known systems.
 
   If called with symbols, only the provided systems will be stopped."
   [& system-symbols]
-  (let [stopped (-stop! system-symbols)]
-    (doseq [sys stopped]
-      (-set! sys (internal/not-running sys)))
-    (seq stopped)))
+  (let [reg     @*registry*
+        systems (->> (if (seq system-symbols)
+                       system-symbols
+                       (keys reg))
+                     (map (comp symbol resolve)))]
+    (loop [to-stop systems
+           stopped nil]
+      (if-some [system (first to-stop)]
+        (if-not (running? system)
+          (recur (rest to-stop) stopped)
+          (let [running-dependents (filter running? (dependents system))]
+            (if (seq running-dependents)
+              (recur (concat running-dependents to-stop) stopped)
+              (do (when-some [stop-fn (-> reg (get system) :stop)]
+                    (stop-fn))
+                  (-set! system (internal/not-running system))
+                  (recur (rest to-stop) (cons system stopped))))))
+        (when stopped
+          (reverse stopped))))))
 
 (defn restart!
   "Restarts all running systems. Returns a sequence of the restarted systems.
@@ -127,7 +110,8 @@
         to-restart (->> (if (seq system-symbols)
                           system-symbols
                           (keys reg))
-                        (filter running?))]
+                        (filter running?)
+                        (doall))]
     (apply stop! to-restart)
     (apply start! to-restart)
     (seq to-restart)))
