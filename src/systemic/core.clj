@@ -151,18 +151,20 @@
                              (drop-while (comp not #{:start}))
                              (take-while (comp not #{:stop}))
                              seq)
-        start-fn        (when start-body
-                          `(fn [] ~@start-body))
         stop-body       (->> args
                              (drop-while (comp not #{:stop}))
                              (take-while (comp not #{:start}))
                              seq)
-
-        stop-fn (when stop-body
-                  `(fn [] ~@stop-body))
-
-        ns            (symbol (str *ns*))
-        qualified-sym (symbol (str *ns*) (name name-symbol))
+        start-body      (or start-body
+                            (and (nil? start-body)
+                                 (nil? stop-body)
+                                 (seq args)))
+        start-fn        (when start-body
+                          `(fn [] ~@start-body))
+        stop-fn         (when stop-body
+                          `(fn [] ~@stop-body))
+        ns              (symbol (str *ns*))
+        qualified-sym   (symbol (str *ns*) (name name-symbol))
 
         name-symbol (with-meta (symbol (name name-symbol))
                       (merge {:dynamic true

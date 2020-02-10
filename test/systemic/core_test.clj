@@ -73,6 +73,13 @@
       (is (= ::sut/not-running (:type data)))
       (is (= registry-symbol (:system data)))))
 
+  (testing "short-hand definition"
+    (with-isolated-registry
+      (defsys *short*
+        5)
+      (sut/start! `*short*)
+      (is (= 5 *short*))))
+
   (testing "dependencies"
     (testing "sets registry info"
       (is (= #{registry-symbol}
