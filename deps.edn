@@ -1,3 +1,9 @@
-{:paths ["src" "test"]
+{:paths ["src"]
+ :pablo/config
+ {:github      "teknql/systemic"
+  :desc        "Application state management for Clojure"
+  :target      :jar
+  :group-id    teknql
+  :artifact-id systemic}
  :deps
  {}}
