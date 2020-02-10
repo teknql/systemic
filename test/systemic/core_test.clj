@@ -83,7 +83,24 @@
   (testing "dependencies"
     (testing "sets registry info"
       (is (= #{registry-symbol}
-             (-> @sut/*registry* (get `*dependent*) :dependencies)))))
+             (-> @sut/*registry* (get `*dependent*) :dependencies))))
+
+    (testing "with explicitly set additional dependencies"
+      (with-isolated-registry
+        (defsys *actual-dep*
+          nil)
+
+        (defsys *explicit-dep*
+          nil)
+
+        (defsys *extra-deps*
+          :extra-deps [*explicit-dep*]
+          :start
+          (*actual-dep*)
+          5)
+
+        (is (= `#{*actual-dep* *explicit-dep*}
+               (-> @sut/*registry* (get `*extra-deps*) :dependencies))))))
 
   (testing "redefinition semantics"
     (with-isolated-registry

@@ -147,6 +147,11 @@
   [name-symbol & args]
   (let [[doc-str args]  (internal/extract-arg args string?)
         [attr-map args] (internal/extract-arg args map?)
+        extra-deps      (when (some #{:extra-deps} args)
+                          (->> args
+                               (drop-while #(not= % :extra-deps))
+                               (drop 1)
+                               (first)))
         start-body      (->> args
                              (drop-while (comp not #{:start}))
                              (take-while (comp not #{:stop}))
@@ -174,6 +179,7 @@
                              attr-map))]
     `(let [reg#  @*registry*
            deps# (set/difference (set/union
+                                   (internal/find-dependencies '~ns '~extra-deps reg#)
                                    (internal/find-dependencies '~ns '~start-body reg#)
                                    (internal/find-dependencies '~ns '~stop-body reg#))
                                  #{'~qualified-sym})]
