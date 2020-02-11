@@ -66,13 +66,15 @@
                                 (remove running?)
                                 (doall))]
       (if-some [sys (first system-symbols)]
-        (let [{:keys [start dependencies]} (get reg sys)
-              needed-deps                  (remove running? dependencies)]
-          (if (seq needed-deps)
-            (recur started-systems (concat needed-deps system-symbols))
-            (do (-set! sys (when start (start)))
-                (recur (cons sys started-systems)
-                       (rest system-symbols)))))
+        (if (running? sys)
+          (recur started-systems (rest system-symbols))
+          (let [{:keys [start dependencies]} (get reg sys)
+                needed-deps                  (remove running? dependencies)]
+            (if (seq needed-deps)
+              (recur started-systems (concat needed-deps system-symbols))
+              (do (-set! sys (when start (start)))
+                  (recur (cons sys started-systems)
+                         (rest system-symbols))))))
         (when started-systems
           (reverse started-systems))))))
 
@@ -110,11 +112,11 @@
         to-restart (->> (if (seq system-symbols)
                           system-symbols
                           (keys reg))
+                        (map (comp symbol resolve))
                         (filter running?)
-                        (doall))]
-    (apply stop! to-restart)
-    (apply start! to-restart)
-    (seq to-restart)))
+                        (doall))
+        stopped    (apply stop! to-restart)]
+    (apply start! stopped)))
 
 (defn forget!
   "Removes the provided `system-symbol` from the registry.

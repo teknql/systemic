@@ -168,11 +168,14 @@
     (testing "returns the restarted systems"
       (is (= `(*config* *dependent* *transitive-dependent*)
              (sut/restart!))))
-
     (testing "calls stop"
       (is @stop-called))
     (testing "calls start"
-      (is @start-called)))
+      (is @start-called))
+
+    (testing "restarts dependents"
+      (is (= `(*config* *dependent* *transitive-dependent*) (sut/restart! `*config*)))
+      (is (every? sut/running? `(*config* *dependent* *transitive-dependent*)))))
 
   (testing "stop"
     (reset! stop-called false)
