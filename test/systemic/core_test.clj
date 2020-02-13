@@ -107,16 +107,21 @@
       (let [original-start-called (atom false)
             original-stop-called  (atom false)
             new-start-called      (atom false)
-            new-stop-called       (atom false)]
+            new-stop-called       (atom false)
+            dependent-restarted   (atom false)]
 
         (defsys *redefined*
           :start (reset! original-start-called true)
           :stop (reset! original-stop-called true))
 
-        (sut/start! `*redefined*)
+        (defsys *depends-on-redefined*
+          :extra-deps #{*redefined*}
+          (reset! dependent-restarted true))
+        (sut/start! `*redefined* `*depends-on-redefined*)
 
         (is @original-start-called)
         (reset! original-start-called false)
+        (reset! dependent-restarted false)
 
         (defsys *redefined*
           :start (reset! new-start-called true)
@@ -124,6 +129,7 @@
 
         (is @original-stop-called)
         (is @new-start-called)
+        (is @dependent-restarted)
         (is (not @original-start-called))
         (reset! original-stop-called false)
 

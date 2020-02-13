@@ -135,12 +135,10 @@
 (defn register-system!
   "Registers a system in the `registry`. Called by the `defsys` macro. Use that instead!"
   [system-name data]
-  (let [was-running? (running? system-name)]
-    (when was-running?
-      (stop! system-name))
+  (let [to-restart (stop! system-name)]
     (swap! *registry* assoc system-name data)
-    (when was-running?
-      (start! system-name))
+    (when to-restart
+      (apply start! to-restart))
     (resolve system-name)))
 
 (defmacro defsys
