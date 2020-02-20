@@ -47,7 +47,13 @@
 (deftest find-dependencies-test
   (testing "correctly identifies dependencies in a body"
     (is (= #{registry-symbol}
-           (internal/find-dependencies (-> *ns* str symbol) `(get *config* :foo) @sut/*registry*)))))
+           (internal/find-dependencies (-> *ns* str symbol) `(get *config* :foo) @sut/*registry*))))
+
+  (testing "handling boddies with java classes"
+    (is (= #{} (internal/find-dependencies (-> *ns* str symbol) `(try 5
+                                                                      (catch Exception e
+                                                                        nil))
+                                           @sut/*registry*)))))
 
 (deftest defsys-test
   (testing "registers it in the registry"

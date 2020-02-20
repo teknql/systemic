@@ -26,9 +26,11 @@
     (walk/postwalk
       (fn [item]
         (when-some [qualified-sym (when (symbol? item)
-                                    (some->> item
-                                             (ns-resolve ns)
-                                             symbol))]
+                                    (let [resolved (ns-resolve ns item)]
+                                      (cond
+                                        (var? resolved)   (symbol resolved)
+                                        (nil? resolved)   nil
+                                        (class? resolved) nil)))]
           (when (contains? registry qualified-sym)
             (conj! result qualified-sym))))
       form)
