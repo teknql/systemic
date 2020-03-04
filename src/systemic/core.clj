@@ -3,10 +3,10 @@
             [systemic.core :as sut]
             [systemic.internal :as internal]))
 
-(def ^:dynamic *registry*
+(def ^{:dynamic true :no-doc true} *registry*
   (atom {}))
 
-(def ^:dynamic *isolated*
+(def ^{:dynamic true :no-doc true} *isolated*
   false)
 
 (defn- -set!

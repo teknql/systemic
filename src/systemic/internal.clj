@@ -1,5 +1,6 @@
 (ns systemic.internal
   "Internal namespace used by systemic macros"
+  {:no-doc true}
   (:require [clojure.walk :as walk]))
 
 (defn extract-arg
