@@ -143,7 +143,10 @@
 
 (defmacro defsys
   "Defines a new systemic component with the provided name."
-  {:arglists '((name doc-string? attr-map? [:start start-body] [:stop stop-body]))}
+  {:arglists '((name doc-string? attr-map?
+                     [:extra-deps extras]
+                     [:start start-body]
+                     [:stop stop-body]))}
   [name-symbol & args]
   (let [[doc-str args]  (internal/extract-arg args string?)
         [attr-map args] (internal/extract-arg args map?)
