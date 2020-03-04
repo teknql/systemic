@@ -17,7 +17,7 @@
   [var-symbol value]
   (if-not *isolated*
     (alter-var-root (resolve var-symbol) (constantly value))
-    (eval `(set! ~var-symbol ~value))))
+    (var-set (resolve var-symbol) value)))
 
 
 (defn running?
