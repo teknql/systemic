@@ -146,6 +146,7 @@
 
 (defn register-system!
   "Registers a system in the `registry`. Called by the `defsys` macro. Use that instead!"
+  {:no-doc true}
   [system-name data]
   (let [to-restart (stop! system-name)]
     (swap! *registry* assoc system-name data)
