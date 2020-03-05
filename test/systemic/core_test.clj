@@ -214,6 +214,32 @@
       (sut/stop! `*dependent*)
       (is (not @stop-called)))))
 
+(deftest error-handling-test
+  (with-isolated-registry
+    (defsys *error-on-start*
+      (throw (ex-info "Boom" {})))
+
+    (defsys *error-on-stop*
+      :stop
+      (throw (ex-info "Boom" {})))
+
+    (testing "start errors"
+      (try
+        (sut/start! `*error-on-start*)
+        (catch Exception e
+          (let [data (ex-data e)]
+            (is (= :system-start (:type data)))
+            (is (= `*error-on-start* (:system data)))))))
+
+    (testing "stop errors"
+      (sut/start! `*error-on-stop*)
+      (try
+        (sut/stop! `*error-on-stop*)
+        (catch Exception e
+          (let [data (ex-data e)]
+            (is (= :system-stop (:type data)))
+            (is (= `*error-on-stop* (:system data)))))))))
+
 (deftest with-system-test
   (testing "overwrites bindings"
     (with-isolated-registry

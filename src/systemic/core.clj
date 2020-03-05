@@ -72,7 +72,14 @@
                 needed-deps                  (remove running? dependencies)]
             (if (seq needed-deps)
               (recur started-systems (concat needed-deps system-symbols))
-              (do (-set! sys (when start (start)))
+              (do (-set! sys (when start
+                               (try
+                                 (start)
+                                 (catch Exception e
+                                   (throw
+                                     (ex-info "Error starting system" {:type   :system-start
+                                                                       :system sys
+                                                                       :cause  e}))))))
                   (recur (cons sys started-systems)
                          (rest system-symbols))))))
         (when started-systems
@@ -97,7 +104,12 @@
             (if (seq running-dependents)
               (recur (concat running-dependents to-stop) stopped)
               (do (when-some [stop-fn (-> reg (get system) :stop)]
-                    (stop-fn))
+                    (try
+                      (stop-fn)
+                      (catch Exception e
+                        (throw (ex-info "Error stopping system" {:type   :system-stop
+                                                                 :system system
+                                                                 :cause  e})))))
                   (-set! system (internal/not-running system))
                   (recur (rest to-stop) (cons system stopped))))))
         (when stopped
