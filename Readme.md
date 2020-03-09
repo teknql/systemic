@@ -180,9 +180,18 @@ local bindings in the current thread make their way to the new thread.
 Fortunately, most of clojure's built in concurrency primitives and libraries
 handle this for you behind the scenes.
 
-## Editor Configuration
+## Editor and Tool Configuration
 
 Below are some useful snippets to make working with systemic even better.
+
+### Clj-Kondo
+
+Place this in `$PROJECT_ROOT/.clj-kondo/config.edn` to get proper linting inside
+from clj-kondo.
+``` clojure
+{:lint-as {systemic.core/defsys clojure.core/def}}
+```
+
 
 ### Emacs
 
