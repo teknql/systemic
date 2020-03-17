@@ -189,22 +189,22 @@
                                           ::system true}
                                          (meta name-symbol)
                                          attr-map))]
-    `(let [reg#           @*registry*
-           deps#          (set/difference (set/union
-                                            (internal/find-dependencies '~ns '~deps reg#)
-                                            (internal/find-dependencies '~ns '~closure-body reg#)
-                                            (internal/find-dependencies '~ns '~start-body reg#)
-                                            (internal/find-dependencies '~ns '~stop-body reg#))
-                                          #{'~qualified-sym})
-           {start# :start
-            stop#  :stop} (~closure-fn)]
+    `(let [reg#  @*registry*
+           deps# (set/difference (set/union
+                                   (internal/find-dependencies '~ns '~deps reg#)
+                                   (internal/find-dependencies '~ns '~closure-body reg#)
+                                   (internal/find-dependencies '~ns '~start-body reg#)
+                                   (internal/find-dependencies '~ns '~stop-body reg#))
+                                 #{'~qualified-sym})]
        (def ~name-symbol
          (or (state '~qualified-sym)
              (internal/not-running '~qualified-sym)))
-       (register-system! '~qualified-sym
-                         {:start        start#
-                          :stop         stop#
-                          :dependencies deps#}))))
+       (let [{start# :start
+              stop#  :stop} (~closure-fn)]
+         (register-system! '~qualified-sym
+                           {:start        start#
+                            :stop         stop#
+                            :dependencies deps#})))))
 
 (defmacro with-system
   "Executes `body` using system overrides from `bindings` as running systems."
