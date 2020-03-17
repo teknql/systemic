@@ -26,6 +26,10 @@ allowing for testing of systems in the same REPL as development.
 
 ### Implicit and Explicit Dependency Resolution
 
+The `defsys` macro will automatically infer dependent systems by analyzing the
+body of the form. Additional dependencies can be specified by explicitly adding
+them with the `:deps` option of the macro.
+
 ```clojure
 (ns example.dep-resolution
   (:require [systemic.core :as systemic :refer [defsys]]))
@@ -38,7 +42,7 @@ allowing for testing of systems in the same REPL as development.
   :stop (shutdown-server *server*))
 
 (defsys *monitor*
-  :extra-deps [*server*]
+  :deps [*server*]
   :start
   (start-monitor!)
   :stop
@@ -71,7 +75,7 @@ the existing systems are running.
       (assoc-in [:headers "USer-Agent"] "Shiny Co. API Client")))
 
 (defsys *send-req*
-  :extra-deps [*api-key*]
+  :deps [*api-key*]
   :start
   (comp http/request decorate-req))
 
@@ -109,7 +113,7 @@ behavior to be configurable (see Roadmap below).
   (println "Old A stop"))
 
 (defsys *b*
-  :extra-deps [*a*]
+  :deps [*a*]
   :start
   (println "B start")
   :stop

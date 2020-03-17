@@ -157,45 +157,36 @@
 (defmacro defsys
   "Defines a new systemic component with the provided name."
   {:arglists '((name doc-string? attr-map?
-                     [:extra-deps extras]
+                     [:deps extras]
                      [:start start-body]
                      [:stop stop-body]))}
   [name-symbol & args]
-  (let [[doc-str args]  (internal/extract-arg args string?)
-        [attr-map args] (internal/extract-arg args map?)
-        extra-deps      (when (some #{:extra-deps} args)
-                          (->> args
-                               (drop-while #(not= % :extra-deps))
-                               (drop 1)
-                               (first)))
-        start-body      (->> args
-                             (drop-while (comp not #{:start}))
-                             (take-while (comp not #{:stop}))
-                             seq)
-        stop-body       (->> args
-                             (drop-while (comp not #{:stop}))
-                             (take-while (comp not #{:start}))
-                             seq)
-        start-body      (or start-body
-                            (and (nil? start-body)
-                                 (nil? stop-body)
-                                 (seq args)))
-        start-fn        (when start-body
-                          `(fn [] ~@start-body))
-        stop-fn         (when stop-body
-                          `(fn [] ~@stop-body))
-        ns              (symbol (str *ns*))
-        qualified-sym   (symbol (str *ns*) (name name-symbol))
-
-        name-symbol (with-meta (symbol (name name-symbol))
-                      (merge {:dynamic true
-                              :doc     doc-str
-                              ::system true}
-                             (meta name-symbol)
-                             attr-map))]
+  (let [[doc-str args]     (internal/extract-arg args string?)
+        [attr-map args]    (internal/extract-arg args map?)
+        {deps       :deps
+         start-body :start
+         stop-body  :stop} (internal/extract-kwargs [[:deps :extra-deps]
+                                                     :start
+                                                     :stop]
+                                                    args)
+        start-body         (if (or start-body stop-body)
+                             start-body
+                             (seq args))
+        start-fn           (when start-body
+                             `(fn [] ~@start-body))
+        stop-fn            (when stop-body
+                             `(fn [] ~@stop-body))
+        ns                 (symbol (str *ns*))
+        qualified-sym      (symbol (str *ns*) (name name-symbol))
+        name-symbol        (with-meta (symbol (name name-symbol))
+                             (merge {:dynamic true
+                                     :doc     doc-str
+                                     ::system true}
+                                    (meta name-symbol)
+                                    attr-map))]
     `(let [reg#  @*registry*
            deps# (set/difference (set/union
-                                   (internal/find-dependencies '~ns '~extra-deps reg#)
+                                   (internal/find-dependencies '~ns '~deps reg#)
                                    (internal/find-dependencies '~ns '~start-body reg#)
                                    (internal/find-dependencies '~ns '~stop-body reg#))
                                  #{'~qualified-sym})]

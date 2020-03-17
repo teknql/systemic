@@ -100,7 +100,7 @@
           nil)
 
         (defsys *extra-deps*
-          :extra-deps [*explicit-dep*]
+          :deps [*explicit-dep*]
           :start
           (*actual-dep*)
           5)
@@ -121,7 +121,7 @@
           :stop (reset! original-stop-called true))
 
         (defsys *depends-on-redefined*
-          :extra-deps #{*redefined*}
+          :deps #{*redefined*}
           (reset! dependent-restarted true))
         (sut/start! `*redefined* `*depends-on-redefined*)
 
