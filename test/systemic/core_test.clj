@@ -58,6 +58,7 @@
 (deftest defsys-test
   (testing "registers it in the registry"
     (is (get @sut/*registry* registry-symbol)))
+
   (testing "creates a start function"
     (let [start-fn (-> @sut/*registry* (get registry-symbol) :start)]
       (is (= {:foo 5} (start-fn)))))
@@ -313,3 +314,20 @@
             (is (not @b-started))
             (is (not @c-started))
             (reset-all!)))))))
+
+(deftest defsys-closure-test
+  (with-isolated-registry
+    (defsys *custom-closure*
+      :closure
+      (let [counter (atom 0)]
+        {:start #(do (swap! counter inc)
+                     counter)
+         :stop  #(swap! counter inc)}))
+
+    (sut/start! `*custom-closure*)
+    (let [counter *custom-closure*]
+      (is (= 1 @counter))
+      (sut/stop! `*custom-closure*)
+      (is (= 2 @counter))
+      (sut/start! `*custom-closure*)
+      (is (= 3 @counter)))))

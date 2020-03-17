@@ -161,41 +161,49 @@
                      [:start start-body]
                      [:stop stop-body]))}
   [name-symbol & args]
-  (let [[doc-str args]     (internal/extract-arg args string?)
-        [attr-map args]    (internal/extract-arg args map?)
-        {deps       :deps
-         start-body :start
-         stop-body  :stop} (internal/extract-kwargs [[:deps :extra-deps]
-                                                     :start
-                                                     :stop]
-                                                    args)
-        start-body         (if (or start-body stop-body)
-                             start-body
-                             (seq args))
-        start-fn           (when start-body
-                             `(fn [] ~@start-body))
-        stop-fn            (when stop-body
-                             `(fn [] ~@stop-body))
-        ns                 (symbol (str *ns*))
-        qualified-sym      (symbol (str *ns*) (name name-symbol))
-        name-symbol        (with-meta (symbol (name name-symbol))
-                             (merge {:dynamic true
-                                     :doc     doc-str
-                                     ::system true}
-                                    (meta name-symbol)
-                                    attr-map))]
-    `(let [reg#  @*registry*
-           deps# (set/difference (set/union
-                                   (internal/find-dependencies '~ns '~deps reg#)
-                                   (internal/find-dependencies '~ns '~start-body reg#)
-                                   (internal/find-dependencies '~ns '~stop-body reg#))
-                                 #{'~qualified-sym})]
+  (let [[doc-str args]          (internal/extract-arg args string?)
+        [attr-map args]         (internal/extract-arg args map?)
+        {deps         :deps
+         start-body   :start
+         stop-body    :stop
+         closure-body :closure} (internal/extract-kwargs [[:deps :extra-deps]
+                                                          :start
+                                                          :stop
+                                                          :closure]
+                                                         args)
+        _                       (assert (not (and closure-body
+                                                  (or start-body stop-body)))
+                                        "Conflicting configuration found. Cannot use `:closure` with `:stop` and `:start`")
+        start-body              (if (or start-body stop-body closure-body)
+                                  start-body
+                                  (seq args))
+        closure-fn              (if closure-body
+                                  `(fn [] ~@closure-body)
+                                  `(fn [] {:start (fn [] ~@start-body)
+                                           :stop  (fn [] ~@stop-body)}))
+        ns                      (symbol (str *ns*))
+        qualified-sym           (symbol (str *ns*) (name name-symbol))
+        name-symbol             (with-meta (symbol (name name-symbol))
+                                  (merge {:dynamic true
+                                          :doc     doc-str
+                                          ::system true}
+                                         (meta name-symbol)
+                                         attr-map))]
+    `(let [reg#           @*registry*
+           deps#          (set/difference (set/union
+                                            (internal/find-dependencies '~ns '~deps reg#)
+                                            (internal/find-dependencies '~ns '~closure-body reg#)
+                                            (internal/find-dependencies '~ns '~start-body reg#)
+                                            (internal/find-dependencies '~ns '~stop-body reg#))
+                                          #{'~qualified-sym})
+           {start# :start
+            stop#  :stop} (~closure-fn)]
        (def ~name-symbol
          (or (state '~qualified-sym)
              (internal/not-running '~qualified-sym)))
        (register-system! '~qualified-sym
-                         {:start        ~start-fn
-                          :stop         ~stop-fn
+                         {:start        start#
+                          :stop         stop#
                           :dependencies deps#}))))
 
 (defmacro with-system
