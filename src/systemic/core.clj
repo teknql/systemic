@@ -159,7 +159,8 @@
   {:arglists '((name doc-string? attr-map?
                      [:deps extras]
                      [:start start-body]
-                     [:stop stop-body]))}
+                     [:stop stop-body]
+                     [:closure closure-body]))}
   [name-symbol & args]
   (let [[doc-str args]          (internal/extract-arg args string?)
         [attr-map args]         (internal/extract-arg args map?)
