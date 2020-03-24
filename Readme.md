@@ -181,17 +181,17 @@ Sometimes it can be useful to capture variables inside of a running system. To
 provide for this, systemic provides the `:closure` option as an alternative to
 the `:start` and `:stop` configuration.
 
-The `:closure` body will be invoked once per call to `defsys` and should return
-a map with `:start` and `:stop` keys bound to functions that will be called
-during startup and stop. Note that the closure should not rely on dependent
-systems, however `:start` and `:stop` functions may.
+The `:closure` body will be invoked each time the system starts and should return
+a map with `:value` and `:stop`. The `:value` key will be used to set the
+running system's value, while `:stop` should be a function that will be called
+when the system is stopped.
 
 ```clojure
 (defsys *advanced-system*
   :closure
-  (let [internal-atom (atom 0)]
-    {:start (fn [] (swap! internal-atom inc))
-     :stop  (fn [] (swap! internal-atom dec))}))
+  (let [my-internal-server (create-server!)]
+    {:value (wrap-server my-internal-server)
+     :stop  (fn [] (stop-server! my-internal-server))}))
 ```
 
 ## Caveats and Warnings

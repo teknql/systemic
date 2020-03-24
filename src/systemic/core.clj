@@ -68,13 +68,16 @@
       (if-some [sys (first system-symbols)]
         (if (running? sys)
           (recur started-systems (rest system-symbols))
-          (let [{:keys [start dependencies]} (get reg sys)
-                needed-deps                  (remove running? dependencies)]
+          (let [{:keys [closure dependencies
+                        stop-atom]} (get reg sys)
+                needed-deps         (remove running? dependencies)]
             (if (seq needed-deps)
               (recur started-systems (concat needed-deps system-symbols))
-              (do (-set! sys (when start
+              (do (-set! sys (when closure
                                (try
-                                 (start)
+                                 (let [{:keys [value stop]} (closure)]
+                                   (reset! stop-atom stop)
+                                   value)
                                  (catch Exception e
                                    (throw
                                      (ex-info "Error starting system" {:type   :system-start
@@ -103,7 +106,7 @@
           (let [running-dependents (filter running? (dependents system))]
             (if (seq running-dependents)
               (recur (concat running-dependents to-stop) stopped)
-              (do (when-some [stop-fn (-> reg (get system) :stop)]
+              (do (when-some [stop-fn (-> reg (get system) :stop-atom deref)]
                     (try
                       (stop-fn)
                       (catch Exception e
@@ -182,7 +185,7 @@
                                   (seq args))
         closure-fn              (if closure-body
                                   `(fn [] ~@closure-body)
-                                  `(fn [] {:start (fn [] ~@start-body)
+                                  `(fn [] {:value (do ~@start-body)
                                            :stop  (fn [] ~@stop-body)}))
         ns                      (symbol (str *ns*))
         qualified-sym           (symbol (str *ns*) (name name-symbol))
@@ -202,12 +205,10 @@
        (def ~name-symbol
          (or (state '~qualified-sym)
              (internal/not-running '~qualified-sym)))
-       (let [{start# :start
-              stop#  :stop} (~closure-fn)]
-         (register-system! '~qualified-sym
-                           {:start        start#
-                            :stop         stop#
-                            :dependencies deps#})))))
+       (register-system! '~qualified-sym
+                         {:closure      ~closure-fn
+                          :stop-atom    (atom nil)
+                          :dependencies deps#}))))
 
 (defmacro with-system
   "Executes `body` using system overrides from `bindings` as running systems."
