@@ -1,0 +1,1 @@
+{:lint-as {systemic.core/defsys clojure.core/def}}
