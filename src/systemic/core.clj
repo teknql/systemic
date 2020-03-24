@@ -162,7 +162,9 @@
                      [:stop stop-body]
                      [:closure closure-body]))}
   [name-symbol & args]
-  (let [[doc-str args]          (internal/extract-arg args string?)
+  (let [[doc-str args]          (if (= 1 (count args))
+                                  [nil args]
+                                  (internal/extract-arg args string?))
         [attr-map args]         (internal/extract-arg args map?)
         {deps         :deps
          start-body   :start

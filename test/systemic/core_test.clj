@@ -85,7 +85,13 @@
       (defsys *short*
         5)
       (sut/start! `*short*)
-      (is (= 5 *short*))))
+      (is (= 5 *short*)))
+
+    (with-isolated-registry
+      (defsys *short-string*
+        "some string")
+      (sut/start! `*short-string*)
+      (is (= "some string" *short-string*))))
 
   (testing "dependencies"
     (testing "sets registry info"
