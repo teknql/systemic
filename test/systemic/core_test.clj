@@ -83,8 +83,24 @@
     (with-isolated-registry
       (defsys *short*
         5)
-      (sut/start! `*short*)
-      (is (= 5 *short*)))
+      (defsys *short-with-str*
+        "Test")
+      (defsys *short-with-map*
+        {:test true})
+      (defsys *short-with-map-and-doc-str*
+        "This is a test"
+        {:test true})
+
+      (sut/start! `*short*
+                  `*short-with-str*
+                  `*short-with-map*
+                  `*short-with-map-and-doc-str*)
+      (is (= 5 *short*))
+      (is (= "Test" *short-with-str*))
+      (is (= {:test true} *short-with-map*))
+      (is (= {:test true} *short-with-map-and-doc-str*))
+      (is (= "This is a test"
+            (:doc (meta (resolve `*short-with-map-and-doc-str*))))))
 
     (with-isolated-registry
       (defsys *short-string*

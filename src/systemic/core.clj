@@ -168,7 +168,9 @@
   (let [[doc-str args]          (if (= 1 (count args))
                                   [nil args]
                                   (internal/extract-arg args string?))
-        [attr-map args]         (internal/extract-arg args map?)
+        [attr-map args]         (if (= 1 (count args))
+                                  [nil args]
+                                  (internal/extract-arg args map?))
         {deps         :deps
          start-body   :start
          stop-body    :stop
