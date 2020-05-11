@@ -1,6 +1,6 @@
 # Systemic
 [![Clojars Project](https://img.shields.io/clojars/v/teknql/systemic.svg)](https://clojars.org/teknql/systemic)
-[![cljdoc badge](https://cljdoc.org/badge/teknql/systemic)](https://cljdoc.org/d/tekqnl/systemic/CURRENT)
+[![cljdoc badge](https://cljdoc.org/badge/teknql/systemic)](https://cljdoc.org/d/teknql/systemic/CURRENT)
 
 > “Industrialization is the systemic exploitation of wasting assets. In all too
 > many cases, the thing we call progress is merely an acceleration in the rate
