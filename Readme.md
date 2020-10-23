@@ -1,4 +1,5 @@
 # Systemic
+[![Build Status](https://img.shields.io/github/workflow/status/teknql/systemic/CI.svg)](https://github.com/teknql/systemic/actions)
 [![Clojars Project](https://img.shields.io/clojars/v/teknql/systemic.svg)](https://clojars.org/teknql/systemic)
 [![cljdoc badge](https://cljdoc.org/badge/teknql/systemic)](https://cljdoc.org/d/teknql/systemic/CURRENT)
 
@@ -170,7 +171,7 @@ the development experience.
                  :system-stop  "Error during stop"))
       (= 'example/*socket* system) ;; => true
       (println "Original exception"
-               cause) ;; 
+               cause) ;;
       )))
 
 ```
