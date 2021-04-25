@@ -1,6 +1,5 @@
 (ns systemic.core
   (:require [clojure.set :as set]
-            [systemic.core :as sut]
             [systemic.internal :as internal]))
 
 (def ^{:dynamic true :no-doc true} *registry*
