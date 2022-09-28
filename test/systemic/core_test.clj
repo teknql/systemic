@@ -44,6 +44,12 @@
   This will break if we rename this file but at least it's defined in just one place."
   'systemic.core-test/*config*)
 
+(defn dependent-fn
+  "Testing"
+  {:systemic.core/dependencies #{`*config*}}
+  []
+  5)
+
 (deftest find-dependencies-test
   (testing "correctly identifies dependencies in a body"
     (is (= #{registry-symbol}
@@ -53,7 +59,13 @@
     (is (= #{} (internal/find-dependencies (-> *ns* str symbol) `(try 5
                                                                       (catch Exception e
                                                                         nil))
-                                           @sut/*registry*)))))
+                                           @sut/*registry*))))
+
+  (testing "handling metadata"
+    (is (= #{registry-symbol}
+           (internal/find-dependencies (-> *ns* str symbol)
+                                       `(dependent-fn)
+                                       @sut/*registry*)))))
 
 (deftest defsys-test
   (testing "registers it in the registry"

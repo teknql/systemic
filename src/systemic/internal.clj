@@ -59,12 +59,15 @@
   (let [result (transient #{})]
     (walk/postwalk
       (fn [item]
-        (when-some [qualified-sym (when (symbol? item)
-                                    (let [resolved (ns-resolve ns item)]
-                                      (cond
-                                        (var? resolved)   (symbol resolved)
-                                        (nil? resolved)   nil
-                                        (class? resolved) nil)))]
+        (let [resolved (when (symbol? item)
+                         (ns-resolve ns item))
+              qualified-sym (cond
+                              (var? resolved)   (symbol resolved)
+                              (nil? resolved)   nil
+                              (class? resolved) nil)]
+          (doseq [meta-dep (:systemic.core/dependencies (meta resolved))
+                  dep      (find-dependencies ns meta-dep registry)]
+            (conj! result dep))
           (when (contains? registry qualified-sym)
             (conj! result qualified-sym))))
       form)
