@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
  :pablo/config
  {:github      "teknql/systemic"
   :desc        "Application state management for Clojure"
