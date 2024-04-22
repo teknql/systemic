@@ -1,1 +1,5 @@
-{:lint-as {systemic.core/defsys clojure.core/def}}
+{:lint-as {systemic.core/defsys clojure.core/def}
+ :config-in-call
+ {systemic.core/defsys
+  {:linters
+   {:earmuffed-var-not-dynamic {:level :off}}}}}
