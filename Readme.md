@@ -204,6 +204,40 @@ local bindings in the current thread make their way to the new thread.
 Fortunately, most of clojure's built in concurrency primitives and libraries
 handle this for you behind the scenes.
 
+### Reloading with clj-reload
+
+[clj-reload](https://github.com/tonsky/clj-reload) is a smarter way to reload
+Clojure code during development. When a namespace is reloaded, its systems are,
+by default, stopped (using the old definition) and restarted (using the new
+one) - exactly like the redefinition semantics above.
+
+Some systems are expensive to recreate and don't need to be restarted just
+because your code changed (a database connection or web server, for example).
+For these, annotate the system with `^:clj-reload/keep` and systemic will
+preserve its running value across reloads instead of restarting it:
+
+```clojure
+(ns example.server
+  (:require [systemic.core :as systemic :refer [defsys]]))
+
+;; Restarted on every reload of this namespace (the default)
+(defsys *worker*
+  :start (start-worker!)
+  :stop (stop-worker! *worker*))
+
+;; Kept running across reloads
+^:clj-reload/keep
+(defsys *server*
+  :start (start-web-server! *port*)
+  :stop (shutdown-server! *server*))
+```
+
+Systemic wires this up automatically: if clj-reload is on the classpath when
+`systemic.core` loads, it teaches clj-reload how to keep `defsys` forms. When
+clj-reload is absent this is a no-op, so it remains an optional, development-only
+dependency. The integration relies on `defsys` being referred (or fully
+qualified as `systemic.core/defsys`) in the form.
+
 ## Editor and Tool Configuration
 
 Below are some useful snippets to make working with systemic even better.

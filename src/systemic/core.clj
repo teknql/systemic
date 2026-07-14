@@ -8,30 +8,49 @@
 (def ^{:dynamic true :no-doc true} *isolated*
   false)
 
+(defn- registry-key
+  "Returns the registry key (qualified symbol) for the provided system symbol."
+  [system-symbol]
+  (if (contains? @*registry* system-symbol)
+    system-symbol
+    (some-> system-symbol resolve symbol)))
+
+(defn- not-running-value?
+  "Returns whether the provided value is a `not-running` sentinel."
+  [value]
+  (= ::not-running (some-> value ex-data :type)))
+
 (defn- -set!
-  "A variant of `-set!` that sets dynamic variables in the root by editing the root variable in the
-  case that we aren't in an isolated scope.
+  "Sets a system's running `value`.
+
+  In the root scope the value is written to both the var root and the registry,
+  keeping the registry authoritative across reloads that wipe the var. In an
+  isolated scope only the thread-local var binding is set.
 
   I'm sorry Rich Hickey!"
   [var-symbol value]
   (if-not *isolated*
-    (alter-var-root (resolve var-symbol) (constantly value))
+    (do
+      (alter-var-root (resolve var-symbol) (constantly value))
+      (swap! *registry* assoc-in [(registry-key var-symbol) :value] value))
     (var-set (resolve var-symbol) value)))
 
 
 (defn running?
   "Returns whether the provided system is currently running"
   [system-symbol]
-  (let [v       (resolve system-symbol)
-        var-val (when v (var-get v))]
-    (cond
-      (not v)            false
-      (not (bound? v))   false
-      (= ::not-running
-         (some-> var-val
-                 (ex-data)
-                 :type)) false
-      :else              true)))
+  (if *isolated*
+    (let [v       (resolve system-symbol)
+          var-val (when v (var-get v))]
+      (cond
+        (not v)                       false
+        (not (bound? v))              false
+        (not-running-value? var-val)  false
+        :else                         true))
+    (let [entry (get @*registry* (registry-key system-symbol))]
+      (boolean
+        (and (contains? entry :value)
+             (not (not-running-value? (:value entry))))))))
 
 (defn dependencies
   "Returns the dependencies of the provided system symbol"
@@ -142,8 +161,13 @@
 (defn state
   "Returns the existing state for the running system, if it exists"
   [system-symbol]
-  (when (running? system-symbol)
-    (var-get (resolve system-symbol))))
+  (if *isolated*
+    (when (running? system-symbol)
+      (var-get (resolve system-symbol)))
+    (let [entry (get @*registry* (registry-key system-symbol))]
+      (when (and (contains? entry :value)
+                 (not (not-running-value? (:value entry))))
+        (:value entry)))))
 
 
 (defn register-system!
@@ -248,3 +272,17 @@
              (doseq [s# new-systems#]
                (ns-unmap  (symbol (namespace s#))
                           (symbol (name s#))))))))))
+
+#_{:clj-kondo/ignore [:unused-private-var]}
+(defonce ^{:no-doc true :private true} -clj-reload-installed?
+  ;; Teach clj-reload how to keep `defsys` systems across reloads. Systems
+  ;; annotated with `^:clj-reload/keep` retain their running value on reload
+  ;; instead of being stopped and restarted. A no-op when clj-reload is absent.
+  (boolean
+    (when-some [keep-methods (try
+                               (requiring-resolve 'clj-reload.core/keep-methods)
+                               (catch Throwable _ nil))]
+      (let [defs-method @(requiring-resolve 'clj-reload.keep/keep-methods-defs)]
+        (doseq [tag '[defsys systemic.core/defsys]]
+          (.addMethod ^clojure.lang.MultiFn @keep-methods tag (constantly defs-method)))
+        true))))

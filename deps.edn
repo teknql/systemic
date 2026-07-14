@@ -6,4 +6,8 @@
   :group-id    teknql
   :artifact-id systemic}
  :deps
- {}}
+ {}
+ :aliases
+ {:dev
+  {:extra-paths ["test"]
+   :extra-deps  {io.github.tonsky/clj-reload {:mvn/version "1.0.0"}}}}}

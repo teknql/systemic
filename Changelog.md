@@ -1,4 +1,23 @@
 
+Unreleased
+==========
+
+### Features
+
+  * integrate with [clj-reload](https://github.com/tonsky/clj-reload): `defsys`
+    forms annotated with `^:clj-reload/keep` retain their running value across
+    reloads. Wired up automatically when clj-reload is on the classpath and a
+    no-op otherwise, keeping it an optional development dependency.
+
+### Changes
+
+  * track root running-state in the registry rather than solely on the system
+    var. Because the registry survives namespace unloading, redefining a running
+    system whose var was wiped (as clj-reload does on reload) now cleanly stops
+    the old instance and restarts it, instead of leaving it dangling. `running?`
+    and `state` remain var-based inside `with-system` so isolation is unchanged.
+
+
 0.2.0 / 2020-05-13
 ==================
 

@@ -363,3 +363,98 @@
       (is (= 1 @counter))
       (sut/start! `*custom-closure*)
       (is (= 1 *custom-closure*)))))
+
+(deftest isolation-test
+  (testing "with-system provides thread-local isolation from root state"
+    (with-isolated-registry
+      (let [counter (atom 0)]
+        ;; Each start yields a new, distinct value so we can tell instances apart.
+        (defsys *svc*
+          :start (swap! counter inc)
+          :stop  :stopped)
+
+        (sut/start! `*svc*)
+        (let [root-val (sut/state `*svc*)]
+          (is (sut/running? `*svc*))
+          (is (= 1 root-val))
+
+          (testing "non-overridden running systems appear stopped inside with-system"
+            (with-system []
+              (is (not (sut/running? `*svc*)))
+              (is (nil? (sut/state `*svc*)))))
+
+          (testing "root state is unchanged after exit and :start is not re-run"
+            (is (sut/running? `*svc*))
+            (is (= root-val (sut/state `*svc*)))
+            (is (= 1 @counter)))
+
+          (testing "start! inside with-system is thread-local and leaves root untouched"
+            (with-system []
+              (is (not (sut/running? `*svc*)))
+              (sut/start! `*svc*)
+              (is (sut/running? `*svc*))
+              (is (= 2 (sut/state `*svc*))))
+            (is (sut/running? `*svc*))
+            (is (= root-val (sut/state `*svc*))))
+
+          (testing "stop! inside with-system is thread-local and leaves root running"
+            (with-system []
+              (sut/start! `*svc*)
+              (is (sut/running? `*svc*))
+              (sut/stop! `*svc*)
+              (is (not (sut/running? `*svc*))))
+            (is (sut/running? `*svc*))
+            (is (= root-val (sut/state `*svc*))))
+
+          (sut/stop! `*svc*)
+          (is (not (sut/running? `*svc*)))
+          (is (nil? (sut/state `*svc*)))))))
+
+  (testing "with-system overrides appear running without invoking :start"
+    (with-isolated-registry
+      (let [start-called (atom false)]
+        (defsys *svc*
+          :start (do (reset! start-called true) :real))
+
+        (with-system [*svc* :override]
+          (is (sut/running? `*svc*))
+          (is (= :override (sut/state `*svc*)))
+          (is (= :override *svc*)))
+
+        (is (not @start-called))
+        (is (not (sut/running? `*svc*))))))
+
+  (testing "with-isolated-registry does not persist systems"
+    (let [before (set (keys @sut/*registry*))]
+      (with-isolated-registry
+        (defsys *ephemeral*
+          :start :v)
+        (is (contains? @sut/*registry* `*ephemeral*)))
+      (is (= before (set (keys @sut/*registry*))))
+      (is (nil? (resolve `*ephemeral*))))))
+
+(deftest registry-backed-state-test
+  (testing "root running-state is tracked in the registry so it survives a var wipe"
+    (with-isolated-registry
+      (let [stop-called (atom false)]
+        (defsys *server*
+          :start :val
+          :stop  (reset! stop-called true))
+
+        (sut/start! `*server*)
+        (is (sut/running? `*server*))
+        (is (= :val (sut/state `*server*)))
+
+        ;; Simulate clj-reload unloading the namespace: it wipes the var's running
+        ;; value, but the registry (which lives in systemic.core) survives.
+        (alter-var-root (resolve `*server*) (constantly (internal/not-running `*server*)))
+
+        (testing "running?/state reflect the registry, not the wiped var"
+          (is (sut/running? `*server*))
+          (is (= :val (sut/state `*server*))))
+
+        (testing "the old instance is still detected and cleanly stopped"
+          (sut/stop! `*server*)
+          (is @stop-called)
+          (is (not (sut/running? `*server*)))
+          (is (nil? (sut/state `*server*))))))))
