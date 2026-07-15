@@ -17,7 +17,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup Java
         uses: actions/setup-java@v1.4.3
         with:
@@ -27,7 +27,7 @@ jobs:
         with:
           cli: '1.10.1.561'
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         env:
           cache-name: cache-clj
         with:
